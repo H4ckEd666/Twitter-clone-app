@@ -20,6 +20,12 @@ export const signup = async (req, res) => {
       return res.status(400).json({ error: "Email already registered" });
     }
 
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ error: "Password must be at least 6 characters long" });
+    }
+
     //hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -53,12 +59,59 @@ export const signup = async (req, res) => {
   }
 };
 
-export const login = (req, res) => {
-  // Handle user signup
-  res.json({ message: "User login endpoint" });
+export const login = async (req, res) => {
+  try {
+    // Handle user login
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+    const isPasswordCorrect = await bcrypt.compare(
+      password,
+      user?.password || "",
+    );
+    if (!user || !isPasswordCorrect) {
+      return res.status(400).json({ error: "Invalid username or password" });
+    }
+    generateToken(user._id, res);
+    res.status(200).json({
+      _id: user._id,
+      username: user.username,
+      fullName: user.fullName,
+      email: user.email,
+      followers: user.followers,
+      following: user.following,
+      profileImage: user.profileImage,
+      coverImage: user.coverImage,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
 export const logout = (req, res) => {
-  // Handle user signup
-  res.json({ message: "User logout endpoint" });
+  try {
+    res.clearCookie("jwt", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV !== "development",
+      sameSite: "strict",
+    });
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
