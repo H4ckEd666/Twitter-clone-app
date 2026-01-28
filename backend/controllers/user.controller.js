@@ -1,6 +1,7 @@
 import User from "../models/user.model.js";
 import Notification from "../models/notification.model.js";
 import bcrypt from "bcryptjs";
+import { v2 as cloudinary } from "cloudinary";
 
 export const getUserProfile = async (req, res) => {
   // Logic to get user profile by username
@@ -93,23 +94,58 @@ export const followUnfollowUser = async (req, res) => {
 
 export const updateUserProfile = async (req, res) => {
   // Logic to update user profile
-  const { fullName, email, username, currenPassword, newPassword, bio, links } =
-    req.body;
+  const {
+    fullName,
+    email,
+    username,
+    currentPassword,
+    newPassword,
+    bio,
+    links,
+  } = req.body;
   let { profileImage, coverImage } = req.body;
   const userId = req.user._id;
 
   try {
-    const user = await User.findById(userId);
+    let user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    if ((!newPassword && currenPassword) || (newPassword && !currenPassword)) {
-      return res
-        .status(400)
-        .json({ message: "Both current and new passwords are required" });
+
+    // Validate email format if email is being updated
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: "Invalid email format" });
+      }
+      // Check if email is already taken by another user
+      const existingEmail = await User.findOne({ email });
+      if (existingEmail && existingEmail._id.toString() !== userId.toString()) {
+        return res.status(400).json({ message: "Email already taken" });
+      }
     }
-    if (currentPassword && newPassword) {
-      const isMatch = await bcrypt.compare(currenPassword, user.password);
+
+    // Check if username is already taken by another user
+    if (username) {
+      const existingUser = await User.findOne({ username });
+      if (existingUser && existingUser._id.toString() !== userId.toString()) {
+        return res.status(400).json({ message: "Username already taken" });
+      }
+    }
+
+    // Password update validation
+    if (currentPassword || newPassword) {
+      if (!currentPassword || !newPassword) {
+        return res
+          .status(400)
+          .json({ message: "Both current and new passwords are required" });
+      }
+      if (currentPassword.trim() === "" || newPassword.trim() === "") {
+        return res.status(400).json({ message: "Passwords cannot be empty" });
+      }
+
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+
       if (!isMatch) {
         return res
           .status(400)
@@ -125,20 +161,36 @@ export const updateUserProfile = async (req, res) => {
       user.password = hashedPassword;
     }
 
-    if (profileImage !== undefined) {
-      user.profileImage = profileImage;
+    if (profileImage) {
+      if (user.profileImage) {
+        await cloudinary.uploader.destroy(
+          user.profileImage.split("/").pop().split(".")[0],
+        );
+      }
+      const uploaderResponse = await cloudinary.uploader.upload(profileImage);
+      profileImage = uploaderResponse.secure_url;
     }
-    if (coverImage !== undefined) {
-      user.coverImage = coverImage;
+    if (coverImage) {
+      if (user.coverImage) {
+        await cloudinary.uploader.destroy(
+          user.coverImage.split("/").pop().split(".")[0],
+        );
+      }
+      const uploaderResponse = await cloudinary.uploader.upload(coverImage);
+      coverImage = uploaderResponse.secure_url;
     }
-    user.fullName = fullName;
-    user.email = email;
-    user.username = username;
-    user.bio = bio;
-    user.links = links;
+    user.fullName = fullName || user.fullName;
+    user.email = email || user.email;
+    user.username = username || user.username;
+    user.bio = bio || user.bio;
+    user.links = links || user.links;
+    user.profileImage = profileImage || user.profileImage;
+    user.coverImage = coverImage || user.coverImage;
 
-    await user.save();
-    res.status(200).json({ message: "Profile updated successfully" });
+    user = await user.save();
+
+    user.password = null;
+    res.status(200).json({ message: "Profile updated successfully", user });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
