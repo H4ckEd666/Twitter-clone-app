@@ -1,4 +1,5 @@
 import User from "../models/user.model.js";
+import Post from "../models/post.model.js";
 import Notification from "../models/notification.model.js";
 import bcrypt from "bcryptjs";
 import { v2 as cloudinary } from "cloudinary";
@@ -38,6 +39,49 @@ export const getSuggestedUsers = async (req, res) => {
     });
 
     res.status(200).json(suggestedUsers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getFollowingUsers = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).populate(
+      "following",
+      "username fullName profileImage",
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json(user.following || []);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getMutualUsers = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId)
+      .select("following followers")
+      .lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const followingSet = new Set(user.following.map((id) => id.toString()));
+    const mutualIds = user.followers.filter((id) =>
+      followingSet.has(id.toString()),
+    );
+
+    const mutualUsers = await User.find({ _id: { $in: mutualIds } }).select(
+      "username fullName profileImage",
+    );
+
+    res.status(200).json(mutualUsers);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
@@ -191,6 +235,88 @@ export const updateUserProfile = async (req, res) => {
 
     user.password = null;
     res.status(200).json({ message: "Profile updated successfully", user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const savePost = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { postId } = req.params;
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isSaved = user.savedPosts.includes(postId);
+    if (isSaved) {
+      return res.status(400).json({ message: "Post already saved" });
+    }
+
+    user.savedPosts.push(postId);
+    await user.save();
+
+    res
+      .status(200)
+      .json({ message: "Post saved", savedPosts: user.savedPosts });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const unsavePost = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { postId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isSaved = user.savedPosts.includes(postId);
+    if (!isSaved) {
+      return res.status(400).json({ message: "Post not saved" });
+    }
+
+    user.savedPosts = user.savedPosts.filter(
+      (id) => id.toString() !== postId.toString(),
+    );
+    await user.save();
+
+    res.status(200).json({
+      message: "Post removed from saved",
+      savedPosts: user.savedPosts,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getSavedPosts = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).populate({
+      path: "savedPosts",
+      populate: {
+        path: "user",
+        select: "username avatar",
+      },
+    });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json(user.savedPosts);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });

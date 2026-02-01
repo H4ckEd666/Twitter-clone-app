@@ -1,13 +1,16 @@
 import express from "express";
+import http from "http";
 import dotenv from "dotenv";
 import connectMongoDB from "./db/connectMongoDB.js";
 import cookieParser from "cookie-parser";
 import { v2 as cloudinary } from "cloudinary";
+import { initSocket } from "./socket/index.js";
 
 import authRoutes from "./routes/auth.route.js";
 import userRoutes from "./routes/user.route.js";
 import postRoutes from "./routes/posts.route.js";
 import notificationRoutes from "./routes/notification.route.js";
+import chatRoutes from "./routes/chat.route.js";
 
 dotenv.config();
 
@@ -19,6 +22,7 @@ cloudinary.config({
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const httpServer = http.createServer(app);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -28,8 +32,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/notifications", notificationRoutes); // Example for notification routes
+app.use("/api/chat", chatRoutes);
 
-app.listen(PORT, () => {
+initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   connectMongoDB();
 });

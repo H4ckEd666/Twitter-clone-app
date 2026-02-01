@@ -50,6 +50,28 @@ export const getAllPosts = async (req, res) => {
   }
 };
 
+export const getForYouPosts = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const posts = await Post.find({
+      $or: [
+        { user: userId },
+        { likes: userId },
+        { shares: userId },
+        { "comments.user": userId },
+      ],
+    })
+      .populate({ path: "user", select: "username avatar" })
+      .sort({ createdAt: -1 })
+      .populate({ path: "comments.user", select: "username avatar" })
+      .populate("likes", "user");
+    res.status(200).json(posts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 export const getUserPosts = async (req, res) => {
   try {
     const { username } = req.params;
@@ -76,6 +98,10 @@ export const likePost = async (req, res) => {
     const post = await Post.findById(postId);
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (post.shares?.includes(userId)) {
+      return res.status(400).json({ message: "Post already shared" });
     }
     if (post.likes.includes(userId)) {
       return res.status(400).json({ message: "Post already liked" });
@@ -167,6 +193,7 @@ export const commentOnPost = async (req, res) => {
       to: post.user,
       post: postId,
       comment: newComment._id,
+      commentText: text,
     });
     await notification.save();
     await post.save();
@@ -237,6 +264,118 @@ export const getFollowingPosts = async (req, res) => {
       .populate({ path: "comments.user", select: "username avatar" })
       .populate("likes", "user");
     res.status(200).json(posts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getFollowingActivity = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).select("following");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const followingIds = user.following || [];
+    if (followingIds.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const posts = await Post.find({ user: { $in: followingIds } })
+      .populate({ path: "user", select: "username avatar fullName" })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    const activities = await Notification.find({ from: { $in: followingIds } })
+      .populate("from", "username avatar fullName")
+      .populate("to", "username")
+      .populate({
+        path: "post",
+        populate: { path: "user", select: "username avatar fullName" },
+        select: "text img user",
+      })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    const postItems = posts.map((post) => ({
+      type: "post",
+      createdAt: post.createdAt,
+      from: post.user,
+      post,
+    }));
+
+    const activityItems = activities.map((activity) => ({
+      type: activity.type,
+      createdAt: activity.createdAt,
+      from: activity.from,
+      to: activity.to,
+      post: activity.post,
+    }));
+
+    const merged = [...postItems, ...activityItems].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    );
+
+    res.status(200).json(merged);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const sharePost = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { postId } = req.params;
+    const { toUserId, message } = req.body;
+
+    if (!toUserId) {
+      return res.status(400).json({ message: "Recipient is required" });
+    }
+    if (toUserId.toString() === userId.toString()) {
+      return res.status(400).json({ message: "Cannot share to yourself" });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const currentUser = await User.findById(userId).select(
+      "following followers",
+    );
+    const targetUser = await User.findById(toUserId).select("following");
+    if (!currentUser || !targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isMutual =
+      currentUser.following.some(
+        (id) => id.toString() === toUserId.toString(),
+      ) &&
+      targetUser.following.some((id) => id.toString() === userId.toString());
+
+    if (!isMutual) {
+      return res
+        .status(403)
+        .json({ message: "You can only share with mutuals" });
+    }
+
+    const notification = new Notification({
+      type: "share",
+      from: userId,
+      to: toUserId,
+      post: postId,
+      message: message?.toString().trim() || "",
+    });
+    await notification.save();
+
+    post.shares.push(userId);
+    await post.save();
+
+    res.status(200).json({ message: "Post shared" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });

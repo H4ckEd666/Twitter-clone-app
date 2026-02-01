@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const EditProfileModal = () => {
+const EditProfileModal = ({ user, onSave, isUpdating }) => {
   const [formData, setFormData] = useState({
     fullName: "",
     username: "",
@@ -11,6 +11,18 @@ const EditProfileModal = () => {
     currentPassword: "",
   });
 
+  const hydrateForm = () => {
+    if (!user) return;
+    setFormData((prev) => ({
+      ...prev,
+      fullName: user.fullName || "",
+      username: user.username || "",
+      email: user.email || "",
+      bio: user.bio || "",
+      link: user.link || "",
+    }));
+  };
+
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -19,9 +31,10 @@ const EditProfileModal = () => {
     <>
       <button
         className="btn btn-outline rounded-full btn-sm"
-        onClick={() =>
-          document.getElementById("edit_profile_modal").showModal()
-        }
+        onClick={() => {
+          hydrateForm();
+          document.getElementById("edit_profile_modal").showModal();
+        }}
       >
         Edit profile
       </button>
@@ -32,7 +45,7 @@ const EditProfileModal = () => {
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
-              alert("Profile updated successfully");
+              onSave(formData);
             }}
           >
             <div className="flex flex-wrap gap-2">
@@ -97,7 +110,7 @@ const EditProfileModal = () => {
               onChange={handleInputChange}
             />
             <button className="btn btn-primary rounded-full btn-sm text-white">
-              Update
+              {isUpdating ? "Updating..." : "Update"}
             </button>
           </form>
         </div>

@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 
 import Posts from "../../components/common/Posts";
 import ProfileHeaderSkeleton from "../../components/skeletons/ProfileHeaderSkeleton";
 import EditProfileModal from "./EditProfileModal";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
-import { POSTS } from "../../utils/db/dummy";
+import useFollow from "../../hooks/useFollow";
 
 import { FaArrowLeft } from "react-icons/fa6";
 import { IoCalendarOutline } from "react-icons/io5";
@@ -17,23 +20,59 @@ const ProfilePage = () => {
   const [profileImg, setProfileImg] = useState(null);
   const [feedType, setFeedType] = useState("posts");
 
+  const { username } = useParams();
+
   const coverImgRef = useRef(null);
   const profileImgRef = useRef(null);
 
-  const isLoading = false;
-  const isMyProfile = true;
+  const queryClient = useQueryClient();
+  const { follow, isPending } = useFollow();
 
-  const user = {
-    _id: "1",
-    fullName: "John Doe",
-    username: "johndoe",
-    profileImg: "/avatars/boy2.png",
-    coverImg: "/cover.png",
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    link: "https://youtube.com/@asaprogrammer_",
-    following: ["1", "2", "3"],
-    followers: ["1", "2", "3"],
-  };
+  const { data: authUser } = useQuery({ queryKey: ["authUser"] });
+
+  const {
+    data: user,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["userProfile", username],
+    queryFn: async () => {
+      const res = await fetch(`/api/users/profile/${username}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || "User not found");
+      }
+      return data;
+    },
+    enabled: Boolean(username),
+  });
+
+  const isMyProfile = authUser?.username === user?.username;
+  const isFollowing = authUser?.following?.includes(user?._id);
+
+  const { mutate: updateProfile, isPending: isUpdating } = useMutation({
+    mutationFn: async (payload) => {
+      const res = await fetch("/api/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Update failed");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Profile updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["authUser"] });
+      queryClient.invalidateQueries({ queryKey: ["userProfile", username] });
+    },
+    onError: (err) => {
+      toast.error(err.message || "Update failed");
+    },
+  });
 
   const handleImgChange = (e, state) => {
     const file = e.target.files[0];
@@ -52,7 +91,12 @@ const ProfilePage = () => {
       <div className="flex-[4_4_0]  border-r border-gray-700 min-h-screen ">
         {/* HEADER */}
         {isLoading && <ProfileHeaderSkeleton />}
-        {!isLoading && !user && (
+        {isError && (
+          <p className="text-center text-lg mt-4 text-red-500">
+            {error.message || "User not found"}
+          </p>
+        )}
+        {!isLoading && !isError && !user && (
           <p className="text-center text-lg mt-4">User not found</p>
         )}
         <div className="flex flex-col">
@@ -64,15 +108,13 @@ const ProfilePage = () => {
                 </Link>
                 <div className="flex flex-col">
                   <p className="font-bold text-lg">{user?.fullName}</p>
-                  <span className="text-sm text-slate-500">
-                    {POSTS?.length} posts
-                  </span>
+                  <span className="text-sm text-slate-500">Posts</span>
                 </div>
               </div>
               {/* COVER IMG */}
               <div className="relative group/cover">
                 <img
-                  src={coverImg || user?.coverImg || "/cover.png"}
+                  src={coverImg || user?.coverImage || "/cover.png"}
                   className="h-52 w-full object-cover"
                   alt="cover image"
                 />
@@ -105,7 +147,7 @@ const ProfilePage = () => {
                     <img
                       src={
                         profileImg ||
-                        user?.profileImg ||
+                        user?.profileImage ||
                         "/avatar-placeholder.png"
                       }
                     />
@@ -121,21 +163,52 @@ const ProfilePage = () => {
                 </div>
               </div>
               <div className="flex justify-end px-4 mt-5">
-                {isMyProfile && <EditProfileModal />}
+                {isMyProfile && (
+                  <EditProfileModal
+                    user={user}
+                    isUpdating={isUpdating}
+                    onSave={(formData) =>
+                      updateProfile({
+                        fullName: formData.fullName,
+                        username: formData.username,
+                        email: formData.email,
+                        bio: formData.bio,
+                        links: formData.link,
+                        currentPassword: formData.currentPassword,
+                        newPassword: formData.newPassword,
+                      })
+                    }
+                  />
+                )}
                 {!isMyProfile && (
                   <button
-                    className="btn btn-outline rounded-full btn-sm"
-                    onClick={() => alert("Followed successfully")}
+                    className={`btn rounded-full btn-sm ${
+                      isFollowing ? "btn-outline text-white" : "btn-outline"
+                    }`}
+                    onClick={() => follow(user?._id)}
+                    disabled={isPending}
                   >
-                    Follow
+                    {isPending ? (
+                      <LoadingSpinner size="sm" />
+                    ) : isFollowing ? (
+                      "Unfollow"
+                    ) : (
+                      "Follow"
+                    )}
                   </button>
                 )}
                 {(coverImg || profileImg) && (
                   <button
                     className="btn btn-primary rounded-full btn-sm text-white px-4 ml-2"
-                    onClick={() => alert("Profile updated successfully")}
+                    onClick={() =>
+                      updateProfile({
+                        coverImage: coverImg,
+                        profileImage: profileImg,
+                      })
+                    }
+                    disabled={isUpdating}
                   >
-                    Update
+                    {isUpdating ? <LoadingSpinner size="sm" /> : "Update"}
                   </button>
                 )}
               </div>
@@ -155,12 +228,12 @@ const ProfilePage = () => {
                       <>
                         <FaLink className="w-3 h-3 text-slate-500" />
                         <a
-                          href="https://youtube.com/@asaprogrammer_"
+                          href={user.link}
                           target="_blank"
                           rel="noreferrer"
                           className="text-sm text-blue-500 hover:underline"
                         >
-                          youtube.com/@asaprogrammer_
+                          {user.link.replace(/^https?:\/\//, "")}
                         </a>
                       </>
                     </div>
@@ -206,11 +279,22 @@ const ProfilePage = () => {
                     <div className="absolute bottom-0 w-10  h-1 rounded-full bg-primary" />
                   )}
                 </div>
+                {isMyProfile && (
+                  <div
+                    className="flex justify-center flex-1 p-3 text-slate-500 hover:bg-secondary transition duration-300 relative cursor-pointer"
+                    onClick={() => setFeedType("saved")}
+                  >
+                    Saved
+                    {feedType === "saved" && (
+                      <div className="absolute bottom-0 w-10  h-1 rounded-full bg-primary" />
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
 
-          <Posts />
+          <Posts feedType={feedType} username={user?.username} />
         </div>
       </div>
     </>

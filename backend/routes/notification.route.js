@@ -4,6 +4,7 @@ import {
   deleteNotificationById,
   deleteNotifications,
   getNotifications,
+  getUnreadNotificationsCount,
   markedAsReaded,
   markNotificationAsRead,
   markNotificationAsUnread,
@@ -12,6 +13,7 @@ import {
 const router = express.Router();
 
 router.get("/", protectRoute, getNotifications);
+router.get("/unread-count", protectRoute, getUnreadNotificationsCount);
 router.delete("/", protectRoute, deleteNotifications);
 router.delete("/delete/:id", protectRoute, deleteNotificationById);
 router.post("/readed", protectRoute, markedAsReaded);

@@ -1,26 +1,58 @@
 import { FaRegComment } from "react-icons/fa";
 import { BiRepost } from "react-icons/bi";
 import { FaRegHeart } from "react-icons/fa";
-import { FaRegBookmark } from "react-icons/fa6";
+import { FaRegBookmark, FaBookmark } from "react-icons/fa6";
 import { FaTrash } from "react-icons/fa";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
+import EmojiPicker from "emoji-picker-react";
 
 import LoadingSpinner from "./LoadingSpinner";
 import { formatPostDate } from "../../utils/date";
 
 const Post = ({ post }) => {
   const [comment, setComment] = useState("");
-  const { data: authUser } = useQuery({ queryKey: ["authUser"] });
+  const [showCommentEmojiPicker, setShowCommentEmojiPicker] = useState(false);
+  const [shareComment, setShareComment] = useState("");
+  const [showShareEmojiPicker, setShowShareEmojiPicker] = useState(false);
+  const commentEmojiRef = useRef(null);
+  const commentEmojiButtonRef = useRef(null);
+  const shareEmojiRef = useRef(null);
+  const shareEmojiButtonRef = useRef(null);
   const queryClient = useQueryClient();
+  const authUser = queryClient.getQueryData(["authUser"]);
   const postOwner = post.user;
-  const isLiked = post.likes.includes(authUser._id);
+  const isLiked = authUser
+    ? post.likes.some((like) => {
+        if (typeof like === "string") return like === authUser._id;
+        if (like?._id) return like._id.toString() === authUser._id.toString();
+        return like?.toString?.() === authUser._id.toString();
+      })
+    : false;
+  const isSaved = authUser?.savedPosts?.includes(post._id);
 
-  const isMyPost = authUser._id === post.user._id;
+  const isMyPost = authUser?._id === post.user._id;
 
   const formattedDate = formatPostDate(post.createdAt);
+
+  const {
+    data: mutualUsers = [],
+    isLoading: isMutualsLoading,
+    refetch: refetchMutuals,
+  } = useQuery({
+    queryKey: ["mutualUsers"],
+    queryFn: async () => {
+      const res = await fetch("/api/users/mutuals");
+      const data = await res.json().catch(() => []);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load mutuals");
+      }
+      return data;
+    },
+    enabled: false,
+  });
 
   const { mutate: deletePost, isPending: isDeleting } = useMutation({
     mutationFn: async () => {
@@ -44,10 +76,13 @@ const Post = ({ post }) => {
     },
   });
 
-  const { mutate: likePost, isPending: isLiking } = useMutation({
-    mutationFn: async () => {
+  const { mutate: toggleLike, isPending: isLiking } = useMutation({
+    mutationFn: async ({ shouldLike }) => {
       try {
-        const res = await fetch(`/api/posts/like/${post._id}`, {
+        const endpoint = shouldLike
+          ? `/api/posts/like/${post._id}`
+          : `/api/posts/unlike/${post._id}`;
+        const res = await fetch(endpoint, {
           method: "POST",
         });
         const data = await res.json();
@@ -59,15 +94,16 @@ const Post = ({ post }) => {
         throw new Error(error);
       }
     },
-    onSuccess: (updatedLikes) => {
+    onSuccess: (updatedPost) => {
       // this is not the best UX, bc it will refetch all posts
       // queryClient.invalidateQueries({ queryKey: ["posts"] });
 
       // instead, update the cache directly for that post
-      queryClient.setQueryData(["posts"], (oldData) => {
+      queryClient.setQueriesData({ queryKey: ["posts"] }, (oldData) => {
+        if (!Array.isArray(oldData)) return oldData;
         return oldData.map((p) => {
           if (p._id === post._id) {
-            return { ...p, likes: updatedLikes };
+            return { ...p, likes: updatedPost.likes };
           }
           return p;
         });
@@ -108,6 +144,54 @@ const Post = ({ post }) => {
     },
   });
 
+  const { mutate: toggleSave, isPending: isSaving } = useMutation({
+    mutationFn: async ({ shouldSave }) => {
+      const endpoint = shouldSave
+        ? `/api/users/save/${post._id}`
+        : `/api/users/unsave/${post._id}`;
+      const res = await fetch(endpoint, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Action failed");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["authUser"], (oldData) => {
+        if (!oldData) return oldData;
+        return { ...oldData, savedPosts: data.savedPosts };
+      });
+      toast.success(data.message || "Updated");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const { mutate: sharePost, isPending: isSharing } = useMutation({
+    mutationFn: async ({ toUserId, message }) => {
+      const res = await fetch(`/api/posts/share/${post._id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toUserId, message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Share failed");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || "Post shared");
+      setShareComment("");
+      setShowShareEmojiPicker(false);
+      document.getElementById(`share_modal${post._id}`)?.close();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleDeletePost = () => {
     deletePost();
   };
@@ -118,9 +202,70 @@ const Post = ({ post }) => {
     commentPost();
   };
 
+  const handleCommentEmojiClick = (emojiData) => {
+    const emoji =
+      emojiData?.emoji || emojiData?.native || emojiData?.symbol || "";
+    if (!emoji) return;
+    setComment((prev) => `${prev}${emoji}`);
+    setShowCommentEmojiPicker(false);
+  };
+
+  const handleShareEmojiClick = (emojiData) => {
+    const emoji =
+      emojiData?.emoji || emojiData?.native || emojiData?.symbol || "";
+    if (!emoji) return;
+    setShareComment((prev) => `${prev}${emoji}`);
+    setShowShareEmojiPicker(false);
+  };
+
+  useEffect(() => {
+    if (!showCommentEmojiPicker) return;
+
+    const handleClickOutside = (event) => {
+      const pickerEl = commentEmojiRef.current;
+      const buttonEl = commentEmojiButtonRef.current;
+      if (!pickerEl || !buttonEl) return;
+      if (pickerEl.contains(event.target) || buttonEl.contains(event.target)) {
+        return;
+      }
+      setShowCommentEmojiPicker(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showCommentEmojiPicker]);
+
+  useEffect(() => {
+    if (!showShareEmojiPicker) return;
+
+    const handleClickOutside = (event) => {
+      const pickerEl = shareEmojiRef.current;
+      const buttonEl = shareEmojiButtonRef.current;
+      if (!pickerEl || !buttonEl) return;
+      if (pickerEl.contains(event.target) || buttonEl.contains(event.target)) {
+        return;
+      }
+      setShowShareEmojiPicker(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showShareEmojiPicker]);
+
   const handleLikePost = () => {
-    if (isLiking) return;
-    likePost();
+    if (!authUser || isLiking) return;
+    toggleLike({ shouldLike: !isLiked });
+  };
+
+  const handleSavePost = () => {
+    if (!authUser || isSaving) return;
+    toggleSave({ shouldSave: !isSaved });
+  };
+
+  const handleOpenShare = () => {
+    if (!authUser) return;
+    refetchMutuals();
+    document.getElementById(`share_modal${post._id}`).showModal();
   };
 
   return (
@@ -189,7 +334,7 @@ const Post = ({ post }) => {
                 id={`comments_modal${post._id}`}
                 className="modal border-none outline-none"
               >
-                <div className="modal-box rounded border border-gray-600">
+                <div className="modal-box rounded border border-gray-600 max-h-[85vh] overflow-visible">
                   <h3 className="font-bold text-lg mb-4">COMMENTS</h3>
                   <div className="flex flex-col gap-3 max-h-60 overflow-auto">
                     {post.comments.length === 0 && (
@@ -223,29 +368,52 @@ const Post = ({ post }) => {
                       </div>
                     ))}
                   </div>
-                  <form
-                    className="flex gap-2 items-center mt-4 border-t border-gray-600 pt-2"
-                    onSubmit={handlePostComment}
-                  >
-                    <textarea
-                      className="textarea w-full p-1 rounded text-md resize-none border focus:outline-none  border-gray-800"
-                      placeholder="Add a comment..."
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                    />
-                    <button className="btn btn-primary rounded-full btn-sm text-white px-4">
-                      {isCommenting ? <LoadingSpinner size="md" /> : "Post"}
-                    </button>
-                  </form>
+                  <div className="relative">
+                    <form
+                      className="flex gap-2 items-center mt-4 border-t border-gray-600 pt-2"
+                      onSubmit={handlePostComment}
+                    >
+                      <textarea
+                        className="textarea w-full p-1 rounded text-md resize-none border focus:outline-none  border-gray-800"
+                        placeholder="Add a comment..."
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() =>
+                          setShowCommentEmojiPicker((prev) => !prev)
+                        }
+                        ref={commentEmojiButtonRef}
+                      >
+                        😊
+                      </button>
+                      <button className="btn btn-primary rounded-full btn-sm text-white px-4">
+                        {isCommenting ? <LoadingSpinner size="md" /> : "Post"}
+                      </button>
+                    </form>
+                    {showCommentEmojiPicker && (
+                      <div
+                        className="absolute right-0 top-full mt-2 z-10"
+                        ref={commentEmojiRef}
+                      >
+                        <EmojiPicker onEmojiClick={handleCommentEmojiClick} />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <form method="dialog" className="modal-backdrop">
                   <button className="outline-none">close</button>
                 </form>
               </dialog>
               <div className="flex gap-1 items-center group cursor-pointer">
-                <BiRepost className="w-6 h-6  text-slate-500 group-hover:text-green-500" />
+                <BiRepost
+                  className="w-6 h-6  text-slate-500 group-hover:text-green-500"
+                  onClick={handleOpenShare}
+                />
                 <span className="text-sm text-slate-500 group-hover:text-green-500">
-                  0
+                  {post.shares?.length || 0}
                 </span>
               </div>
               <div
@@ -270,11 +438,105 @@ const Post = ({ post }) => {
               </div>
             </div>
             <div className="flex w-1/3 justify-end gap-2 items-center">
-              <FaRegBookmark className="w-4 h-4 text-slate-500 cursor-pointer" />
+              {isSaved ? (
+                <FaBookmark
+                  className="w-4 h-4 text-blue-500 cursor-pointer"
+                  onClick={handleSavePost}
+                />
+              ) : (
+                <FaRegBookmark
+                  className="w-4 h-4 text-slate-500 cursor-pointer"
+                  onClick={handleSavePost}
+                />
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <dialog
+        id={`share_modal${post._id}`}
+        className="modal border-none outline-none"
+      >
+        <div className="modal-box rounded border border-gray-600 max-h-[85vh] overflow-visible">
+          <h3 className="font-bold text-lg mb-4">Share post</h3>
+          <div className="relative mb-4">
+            <textarea
+              className="textarea w-full p-2 rounded text-md resize-none border focus:outline-none border-gray-800"
+              placeholder="Add a message (optional)"
+              value={shareComment}
+              onChange={(e) => setShareComment(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm absolute right-2 bottom-2"
+              onClick={() => setShowShareEmojiPicker((prev) => !prev)}
+              ref={shareEmojiButtonRef}
+            >
+              😊
+            </button>
+            {showShareEmojiPicker && (
+              <div
+                className="absolute right-0 top-full mt-2 z-10"
+                ref={shareEmojiRef}
+              >
+                <EmojiPicker onEmojiClick={handleShareEmojiClick} />
+              </div>
+            )}
+          </div>
+          {isMutualsLoading && (
+            <div className="flex justify-center">
+              <LoadingSpinner size="md" />
+            </div>
+          )}
+          {!isMutualsLoading && mutualUsers.length === 0 && (
+            <p className="text-sm text-slate-500">
+              No mutual followers available to share.
+            </p>
+          )}
+          {!isMutualsLoading && mutualUsers.length > 0 && (
+            <div className="flex flex-col gap-3 max-h-60 overflow-auto">
+              {mutualUsers.map((user) => (
+                <div
+                  key={user._id}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="avatar">
+                      <div className="w-8 rounded-full">
+                        <img
+                          src={user.profileImage || "/avatar-placeholder.png"}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-semibold truncate w-40">
+                        {user.fullName}
+                      </span>
+                      <span className="text-sm text-slate-500">
+                        @{user.username}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-primary btn-sm rounded-full text-white"
+                    onClick={() =>
+                      sharePost({ toUserId: user._id, message: shareComment })
+                    }
+                    disabled={isSharing}
+                  >
+                    {isSharing ? "Sharing..." : "Share"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button className="outline-none">close</button>
+        </form>
+      </dialog>
     </>
   );
 };

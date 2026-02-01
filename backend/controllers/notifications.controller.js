@@ -3,7 +3,10 @@ import Notification from "../models/notification.model.js";
 export const getNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
-    const notifications = await Notification.find({ to: userId })
+    const notifications = await Notification.find({
+      to: userId,
+      $or: [{ type: { $ne: "like" } }, { from: { $ne: userId } }],
+    })
       .sort({ createdAt: -1 })
       .populate("from", "username avatar")
       .populate("post", "text img")
@@ -82,6 +85,21 @@ export const markNotificationAsUnread = async (req, res) => {
     notification.read = false;
     await notification.save();
     res.status(200).json({ message: "Notification marked as unread" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getUnreadNotificationsCount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const count = await Notification.countDocuments({
+      to: userId,
+      $or: [{ type: { $ne: "like" } }, { from: { $ne: userId } }],
+      read: false,
+    });
+    res.status(200).json({ count });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
