@@ -62,8 +62,8 @@ app.use("/api/notifications", notificationRoutes); // Example for notification r
 app.use("/api/chat", chatRoutes);
 
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/build")));
-  app.get("*", (req, res) => {
+  app.use(express.static(path.join(__dirname, "frontend", "dist")));
+  app.get("/*", (req, res) => {
     res.sendFile(path.join(__dirname, "frontend", "dist", "index.html"));
   });
 }
