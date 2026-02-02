@@ -26,7 +26,16 @@ const PORT = process.env.PORT || 8000;
 const httpServer = http.createServer(app);
 const __dirname = path.resolve();
 
-const allowedOrigins = [process.env.FRONTEND_URL || "http://localhost:3000"];
+const normalizeOrigin = (value) =>
+  value ? value.replace(/\/$/, "").toLowerCase() : value;
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.RENDER_EXTERNAL_URL,
+  "http://localhost:3000",
+]
+  .filter(Boolean)
+  .map((value) => normalizeOrigin(value));
 
 const csrfOriginCheck = (req, res, next) => {
   const method = req.method.toUpperCase();
@@ -36,14 +45,15 @@ const csrfOriginCheck = (req, res, next) => {
 
   const origin = req.get("origin");
   const referer = req.get("referer");
+  const requestOrigin = origin
+    ? normalizeOrigin(origin)
+    : referer
+      ? normalizeOrigin(new URL(referer).origin)
+      : null;
   const isAllowed = (value) =>
-    value && allowedOrigins.some((allowed) => value.startsWith(allowed));
+    value && allowedOrigins.some((allowed) => value === allowed);
 
-  if (origin && !isAllowed(origin)) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  if (!origin && referer && !isAllowed(referer)) {
+  if (requestOrigin && !isAllowed(requestOrigin)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
