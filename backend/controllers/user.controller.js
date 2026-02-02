@@ -3,6 +3,7 @@ import Post from "../models/post.model.js";
 import Notification from "../models/notification.model.js";
 import bcrypt from "bcryptjs";
 import { v2 as cloudinary } from "cloudinary";
+import { validateBase64Image } from "../lib/utils/validateImage.js";
 
 export const getUserProfile = async (req, res) => {
   // Logic to get user profile by username
@@ -206,6 +207,10 @@ export const updateUserProfile = async (req, res) => {
     }
 
     if (profileImage) {
+      const { valid, error: imgError } = validateBase64Image(profileImage);
+      if (!valid) {
+        return res.status(400).json({ message: imgError });
+      }
       if (user.profileImage) {
         await cloudinary.uploader.destroy(
           user.profileImage.split("/").pop().split(".")[0],
@@ -215,6 +220,10 @@ export const updateUserProfile = async (req, res) => {
       profileImage = uploaderResponse.secure_url;
     }
     if (coverImage) {
+      const { valid, error: imgError } = validateBase64Image(coverImage);
+      if (!valid) {
+        return res.status(400).json({ message: imgError });
+      }
       if (user.coverImage) {
         await cloudinary.uploader.destroy(
           user.coverImage.split("/").pop().split(".")[0],

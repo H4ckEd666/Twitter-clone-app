@@ -5,6 +5,7 @@ import { IoCloseSharp } from "react-icons/io5";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 import EmojiPicker from "emoji-picker-react";
+import OnlineDot from "../../components/common/OnlineDot";
 
 const CreatePost = () => {
   const [text, setText] = useState("");
@@ -71,10 +72,11 @@ const CreatePost = () => {
 
   return (
     <div className="flex p-4 items-start gap-4 border-b border-gray-700">
-      <div className="avatar">
-        <div className="w-8 rounded-full">
+      <div className="avatar relative">
+        <div className="w-8 rounded-full overflow-hidden">
           <img src={authUser.profileImg || "/avatar-placeholder.png"} />
         </div>
+        <OnlineDot userId={authUser?._id} />
       </div>
       <form className="flex flex-col gap-2 w-full" onSubmit={handleSubmit}>
         <textarea

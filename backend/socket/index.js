@@ -15,11 +15,13 @@ export const initSocket = (httpServer) => {
     const { userId } = socket.handshake.auth || {};
     if (userId) {
       userSocketMap.set(userId.toString(), socket.id);
+      io.emit("users:online", Array.from(userSocketMap.keys()));
     }
 
     socket.on("disconnect", () => {
       if (userId) {
         userSocketMap.delete(userId.toString());
+        io.emit("users:online", Array.from(userSocketMap.keys()));
       }
     });
   });

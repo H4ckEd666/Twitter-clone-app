@@ -5,6 +5,7 @@ import useFollow from "../../hooks/useFollow";
 
 import RightPanelSkeleton from "../skeletons/RightPanelSkeleton";
 import LoadingSpinner from "./LoadingSpinner";
+import OnlineDot from "./OnlineDot";
 
 const RightPanel = () => {
   const { data: followingUsers = [], isLoading: isFollowingLoading } = useQuery(
@@ -67,12 +68,13 @@ const RightPanel = () => {
                 key={user._id}
               >
                 <div className="flex gap-2 items-center">
-                  <div className="avatar">
-                    <div className="w-8 rounded-full">
+                  <div className="avatar relative">
+                    <div className="w-8 rounded-full overflow-hidden">
                       <img
                         src={user.profileImage || "/avatar-placeholder.png"}
                       />
                     </div>
+                    <OnlineDot userId={user?._id} />
                   </div>
                   <div className="flex flex-col">
                     <span className="font-semibold tracking-tight truncate w-28">
@@ -110,12 +112,13 @@ const RightPanel = () => {
                   key={user._id}
                 >
                   <div className="flex gap-2 items-center">
-                    <div className="avatar">
-                      <div className="w-8 rounded-full">
+                    <div className="avatar relative">
+                      <div className="w-8 rounded-full overflow-hidden">
                         <img
                           src={user.profileImg || "/avatar-placeholder.png"}
                         />
                       </div>
+                      <OnlineDot userId={user?._id} />
                     </div>
                     <div className="flex flex-col">
                       <span className="font-semibold tracking-tight truncate w-28">

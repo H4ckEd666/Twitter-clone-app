@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import Posts from "../../components/common/Posts";
 import CreatePost from "./CreatePost";
@@ -31,6 +32,12 @@ const HomePage = () => {
               <div className="absolute bottom-0 w-10  h-1 rounded-full bg-primary"></div>
             )}
           </div>
+          <Link
+            to="/people"
+            className="flex justify-center flex-1 p-3 hover:bg-secondary transition duration-300 cursor-pointer relative md:hidden"
+          >
+            Suggested
+          </Link>
         </div>
 
         {/*  CREATE POST INPUT */}

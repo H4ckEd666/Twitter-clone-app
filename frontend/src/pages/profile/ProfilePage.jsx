@@ -14,6 +14,7 @@ import { FaArrowLeft } from "react-icons/fa6";
 import { IoCalendarOutline } from "react-icons/io5";
 import { FaLink } from "react-icons/fa";
 import { MdEdit } from "react-icons/md";
+import OnlineDot from "../../components/common/OnlineDot";
 
 const ProfilePage = () => {
   const [coverImg, setCoverImg] = useState(null);
@@ -88,7 +89,7 @@ const ProfilePage = () => {
 
   return (
     <>
-      <div className="flex-[4_4_0]  border-r border-gray-700 min-h-screen ">
+      <div className="flex-[4_4_0] w-full border-r border-gray-700 min-h-screen">
         {/* HEADER */}
         {isLoading && <ProfileHeaderSkeleton />}
         {isError && (
@@ -142,8 +143,8 @@ const ProfilePage = () => {
                   onChange={(e) => handleImgChange(e, "profileImg")}
                 />
                 {/* USER AVATAR */}
-                <div className="avatar absolute -bottom-16 left-4">
-                  <div className="w-32 rounded-full relative group/avatar">
+                <div className="avatar absolute -bottom-16 left-4 relative">
+                  <div className="w-32 rounded-full overflow-hidden group/avatar">
                     <img
                       src={
                         profileImg ||
@@ -160,6 +161,7 @@ const ProfilePage = () => {
                       )}
                     </div>
                   </div>
+                  <OnlineDot userId={user?._id} />
                 </div>
               </div>
               <div className="flex justify-end px-4 mt-5">

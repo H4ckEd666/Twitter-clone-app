@@ -2,6 +2,17 @@ import Post from "../models/post.model.js";
 import User from "../models/user.model.js";
 import Notification from "../models/notification.model.js";
 import { v2 as cloudinary } from "cloudinary";
+import { validateBase64Image } from "../lib/utils/validateImage.js";
+
+const parsePagination = (req, defaultLimit = 20, maxLimit = 50) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit, 10) || defaultLimit, 1),
+    maxLimit,
+  );
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+};
 
 export const createPost = async (req, res) => {
   try {
@@ -20,6 +31,10 @@ export const createPost = async (req, res) => {
     }
 
     if (img) {
+      const { valid, error: imgError } = validateBase64Image(img);
+      if (!valid) {
+        return res.status(400).json({ message: imgError });
+      }
       const uploadResponse = await cloudinary.uploader.upload(img);
       img = uploadResponse.secure_url;
     }
@@ -38,9 +53,12 @@ export const createPost = async (req, res) => {
 
 export const getAllPosts = async (req, res) => {
   try {
+    const { limit, skip } = parsePagination(req, 20, 50);
     const posts = await Post.find()
       .populate({ path: "user", select: "username avatar" })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: "comments.user", select: "username avatar" })
       .populate("likes", "user");
     res.status(200).json(posts);
@@ -53,6 +71,7 @@ export const getAllPosts = async (req, res) => {
 export const getForYouPosts = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { limit, skip } = parsePagination(req, 20, 50);
     const posts = await Post.find({
       $or: [
         { user: userId },
@@ -63,6 +82,8 @@ export const getForYouPosts = async (req, res) => {
     })
       .populate({ path: "user", select: "username avatar" })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: "comments.user", select: "username avatar" })
       .populate("likes", "user");
     res.status(200).json(posts);
@@ -75,6 +96,7 @@ export const getForYouPosts = async (req, res) => {
 export const getUserPosts = async (req, res) => {
   try {
     const { username } = req.params;
+    const { limit, skip } = parsePagination(req, 20, 50);
     const user = await User.findOne({ username });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -82,6 +104,8 @@ export const getUserPosts = async (req, res) => {
     const posts = await Post.find({ user: user._id })
       .populate({ path: "user", select: "username avatar" })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: "comments.user", select: "username avatar" })
       .populate("likes", "user");
     res.status(200).json(posts);
@@ -152,6 +176,7 @@ export const unlikePost = async (req, res) => {
 export const getLikedPosts = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { limit, skip } = parsePagination(req, 20, 50);
     const user = await User.findById(userId).populate({
       path: "likedPosts",
       populate: {
@@ -162,7 +187,7 @@ export const getLikedPosts = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.status(200).json(user.likedPosts);
+    res.status(200).json(user.likedPosts.slice(skip, skip + limit));
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
@@ -254,6 +279,7 @@ export const deleteComment = async (req, res) => {
 export const getFollowingPosts = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { limit, skip } = parsePagination(req, 20, 50);
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -261,6 +287,8 @@ export const getFollowingPosts = async (req, res) => {
     const posts = await Post.find({ user: { $in: user.following } })
       .populate({ path: "user", select: "username avatar" })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: "comments.user", select: "username avatar" })
       .populate("likes", "user");
     res.status(200).json(posts);
@@ -273,6 +301,7 @@ export const getFollowingPosts = async (req, res) => {
 export const getFollowingActivity = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { limit, skip } = parsePagination(req, 20, 50);
     const user = await User.findById(userId).select("following");
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -286,7 +315,8 @@ export const getFollowingActivity = async (req, res) => {
     const posts = await Post.find({ user: { $in: followingIds } })
       .populate({ path: "user", select: "username avatar fullName" })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .skip(skip)
+      .limit(limit);
 
     const activities = await Notification.find({ from: { $in: followingIds } })
       .populate("from", "username avatar fullName")
@@ -297,7 +327,8 @@ export const getFollowingActivity = async (req, res) => {
         select: "text img user",
       })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .skip(skip)
+      .limit(limit);
 
     const postItems = posts.map((post) => ({
       type: "post",

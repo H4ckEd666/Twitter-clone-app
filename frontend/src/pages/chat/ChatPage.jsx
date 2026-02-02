@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { io } from "socket.io-client";
 import { toast } from "react-hot-toast";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+import OnlineDot from "../../components/common/OnlineDot";
+import useSocket from "../../context/useSocket";
 
 const ChatPage = () => {
   const queryClient = useQueryClient();
@@ -22,6 +23,7 @@ const ChatPage = () => {
   });
   const [selectedUser, setSelectedUser] = useState(null);
   const [messageText, setMessageText] = useState("");
+  const { socket } = useSocket();
 
   const { data: mutuals = [], isLoading: isMutualsLoading } = useQuery({
     queryKey: ["mutualUsers"],
@@ -94,13 +96,9 @@ const ChatPage = () => {
   });
 
   useEffect(() => {
-    if (!authUser?._id) return;
-    const socket = io("http://localhost:5000", {
-      withCredentials: true,
-      auth: { userId: authUser._id },
-    });
+    if (!socket || !authUser?._id) return;
 
-    socket.on("message:new", (message) => {
+    const handleMessage = (message) => {
       if (!message?.sender || !message?.receiver) return;
       const otherId =
         message.sender._id === authUser._id
@@ -139,10 +137,14 @@ const ChatPage = () => {
           toast.success(`New message from @${message.sender.username}`);
         }
       }
-    });
+    };
 
-    return () => socket.disconnect();
-  }, [authUser?._id, queryClient, selectedUser?._id]);
+    socket.on("message:new", handleMessage);
+
+    return () => {
+      socket.off("message:new", handleMessage);
+    };
+  }, [socket, authUser?._id, queryClient, selectedUser?._id]);
 
   const messages = messagesData?.messages || [];
 
@@ -160,9 +162,11 @@ const ChatPage = () => {
   }, [messagesData, queryClient, selectedUser?._id]);
 
   return (
-    <div className="flex flex-1 border-r border-gray-700 min-h-screen">
-      <div className="w-60 md:w-72 border-r border-gray-700 p-3 md:p-4">
-        <h2 className="font-bold mb-3 md:mb-4 text-sm md:text-base">Mutuals</h2>
+    <div className="flex flex-[4_4_0] w-full max-w-[360px] sm:max-w-none mx-auto border-r border-gray-700 h-[calc(100vh-4rem)] md:h-screen overflow-hidden">
+      <div className="w-16 sm:w-20 md:w-72 border-r border-gray-700 p-2 sm:p-3 md:p-4 h-full overflow-y-auto">
+        <h2 className="font-bold mb-3 md:mb-4 text-xs sm:text-sm md:text-base">
+          Mutuals
+        </h2>
         {isMutualsLoading && <LoadingSpinner size="md" />}
         {!isMutualsLoading && mutuals.length === 0 && (
           <p className="text-slate-500">No mutuals to chat with.</p>
@@ -192,12 +196,18 @@ const ChatPage = () => {
                 });
               }}
             >
-              <div className="avatar">
-                <div className="w-7 md:w-8 rounded-full">
+              <div className="avatar relative">
+                <div className="w-7 md:w-8 rounded-full overflow-hidden">
                   <img src={user.profileImage || "/avatar-placeholder.png"} />
                 </div>
+                <OnlineDot userId={user._id} />
+                {unreadMap.get(user._id.toString()) > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-[10px] leading-4 text-white text-center border border-black">
+                    {unreadMap.get(user._id.toString())}
+                  </span>
+                )}
               </div>
-              <div className="flex flex-col">
+              <div className="hidden sm:flex flex-col">
                 <span className="font-semibold truncate w-32 md:w-40 text-sm md:text-base">
                   {user.fullName}
                 </span>
@@ -205,23 +215,18 @@ const ChatPage = () => {
                   @{user.username}
                 </span>
               </div>
-              {unreadMap.get(user._id.toString()) > 0 && (
-                <span className="ml-auto badge badge-primary badge-sm">
-                  {unreadMap.get(user._id.toString())}
-                </span>
-              )}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col">
-        <div className="border-b border-gray-700 p-4">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full">
+        <div className="border-b border-gray-700 p-2 sm:p-4 w-full max-w-[320px] sm:max-w-xl mx-auto shrink-0">
           <p className="font-bold">
             {selectedUser ? `Chat with @${selectedUser.username}` : "Messages"}
           </p>
         </div>
-        <div className="flex-1 p-4 overflow-auto">
+        <div className="flex-1 min-h-0 p-2 sm:p-4 overflow-y-auto w-full max-w-[320px] sm:max-w-xl mx-auto">
           {isMessagesLoading && selectedUser && <LoadingSpinner size="md" />}
           {!selectedUser && (
             <p className="text-slate-500">Select a mutual to start chatting.</p>
@@ -233,7 +238,7 @@ const ChatPage = () => {
             {messages.map((msg) => (
               <div
                 key={msg._id}
-                className={`max-w-[70%] rounded p-2 ${
+                className={`max-w-[70%] break-words rounded p-2 ${
                   msg.sender._id === authUser._id
                     ? "ml-auto bg-primary text-white"
                     : "bg-[#1a1a1a]"
@@ -246,7 +251,7 @@ const ChatPage = () => {
         </div>
         {selectedUser && (
           <form
-            className="border-t border-gray-700 p-4 flex gap-2"
+            className="border-t border-gray-700 p-2 sm:p-4 flex gap-2 w-full max-w-[320px] sm:max-w-xl mx-auto shrink-0"
             onSubmit={(e) => {
               e.preventDefault();
               if (!messageText.trim() || isSending) return;
@@ -255,12 +260,15 @@ const ChatPage = () => {
           >
             <input
               type="text"
-              className="input input-bordered flex-1"
+              className="input input-bordered flex-1 input-sm sm:input-md"
               placeholder="Type a message..."
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
             />
-            <button className="btn btn-primary text-white" disabled={isSending}>
+            <button
+              className="btn btn-primary text-white btn-sm sm:btn-md"
+              disabled={isSending}
+            >
               {isSending ? "Sending..." : "Send"}
             </button>
           </form>

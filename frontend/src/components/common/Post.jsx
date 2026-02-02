@@ -10,6 +10,7 @@ import { toast } from "react-hot-toast";
 import EmojiPicker from "emoji-picker-react";
 
 import LoadingSpinner from "./LoadingSpinner";
+import OnlineDot from "./OnlineDot";
 import { formatPostDate } from "../../utils/date";
 
 const Post = ({ post }) => {
@@ -271,13 +272,14 @@ const Post = ({ post }) => {
   return (
     <>
       <div className="flex gap-2 items-start p-4 border-b border-gray-700">
-        <div className="avatar">
+        <div className="avatar relative">
           <Link
             to={`/profile/${postOwner.username}`}
             className="w-8 rounded-full overflow-hidden"
           >
             <img src={postOwner.profileImg || "/avatar-placeholder.png"} />
           </Link>
+          <OnlineDot userId={postOwner?._id} />
         </div>
         <div className="flex flex-col flex-1">
           <div className="flex gap-2 items-center">
@@ -344,8 +346,8 @@ const Post = ({ post }) => {
                     )}
                     {post.comments.map((comment) => (
                       <div key={comment._id} className="flex gap-2 items-start">
-                        <div className="avatar">
-                          <div className="w-8 rounded-full">
+                        <div className="avatar relative">
+                          <div className="w-8 rounded-full overflow-hidden">
                             <img
                               src={
                                 comment.user.profileImg ||
@@ -353,6 +355,7 @@ const Post = ({ post }) => {
                               }
                             />
                           </div>
+                          <OnlineDot userId={comment.user?._id} />
                         </div>
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1">
@@ -503,12 +506,13 @@ const Post = ({ post }) => {
                   className="flex items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="avatar">
-                      <div className="w-8 rounded-full">
+                    <div className="avatar relative">
+                      <div className="w-8 rounded-full overflow-hidden">
                         <img
                           src={user.profileImage || "/avatar-placeholder.png"}
                         />
                       </div>
+                      <OnlineDot userId={user?._id} />
                     </div>
                     <div className="flex flex-col">
                       <span className="font-semibold truncate w-40">

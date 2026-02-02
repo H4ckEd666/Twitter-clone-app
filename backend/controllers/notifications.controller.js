@@ -1,13 +1,26 @@
 import Notification from "../models/notification.model.js";
 
+const parsePagination = (req, defaultLimit = 20, maxLimit = 50) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit, 10) || defaultLimit, 1),
+    maxLimit,
+  );
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+};
+
 export const getNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { limit, skip } = parsePagination(req, 20, 50);
     const notifications = await Notification.find({
       to: userId,
       $or: [{ type: { $ne: "like" } }, { from: { $ne: userId } }],
     })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate("from", "username avatar")
       .populate("post", "text img")
       .populate("comment", "text");
@@ -61,8 +74,12 @@ export const markedAsReaded = async (req, res) => {
 
 export const markNotificationAsRead = async (req, res) => {
   try {
+    const userId = req.user._id;
     const notificationId = req.params.id;
-    const notification = await Notification.findById(notificationId);
+    const notification = await Notification.findOne({
+      _id: notificationId,
+      to: userId,
+    });
     if (!notification) {
       return res.status(404).json({ message: "Notification not found" });
     }
@@ -77,8 +94,12 @@ export const markNotificationAsRead = async (req, res) => {
 
 export const markNotificationAsUnread = async (req, res) => {
   try {
+    const userId = req.user._id;
     const notificationId = req.params.id;
-    const notification = await Notification.findById(notificationId);
+    const notification = await Notification.findOne({
+      _id: notificationId,
+      to: userId,
+    });
     if (!notification) {
       return res.status(404).json({ message: "Notification not found" });
     }

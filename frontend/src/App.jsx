@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import HomePage from "./pages/home/HomePage";
+import SuggestedUsersPage from "./pages/home/SuggestedUsersPage";
 import SignUpPage from "./pages/auth/signup/SignUpPage";
 import LoginPage from "./pages/auth/login/LoginPage";
 import Sidebar from "./components/common/Sidebar";
@@ -10,6 +11,7 @@ import ChatPage from "./pages/chat/ChatPage";
 import { Toaster } from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
 import LoadingSpinner from "./components/common/LoadingSpinner";
+import SocketProvider from "./context/SocketProvider";
 
 function App() {
   const { data: authUser, isLoading } = useQuery({
@@ -43,47 +45,55 @@ function App() {
   }
 
   return (
-    <div className="flex w-full max-w-6xl mx-auto">
-      {authUser && <Sidebar />}
-      <div className="flex-1 flex justify-center md:justify-start pb-16 md:pb-0">
-        <div className="w-full px-2 sm:px-4 md:px-0">
-          <Routes>
-            <Route
-              path="/"
-              element={authUser ? <HomePage /> : <Navigate to="/login" />}
-            />
-            <Route
-              path="/signup"
-              element={!authUser ? <SignUpPage /> : <Navigate to="/" />}
-            />
-            <Route
-              path="/login"
-              element={!authUser ? <LoginPage /> : <Navigate to="/" />}
-            />
-            <Route
-              path="/notifications"
-              element={
-                authUser ? <NotificationPage /> : <Navigate to="/login" />
-              }
-            />
-            <Route
-              path="/profile/:username"
-              element={authUser ? <ProfilePage /> : <Navigate to="/login" />}
-            />
-            <Route
-              path="/messages"
-              element={authUser ? <ChatPage /> : <Navigate to="/login" />}
-            />
-            <Route
-              path="/messages"
-              element={authUser ? <ChatPage /> : <Navigate to="/login" />}
-            />
-          </Routes>
+    <SocketProvider>
+      <div className="flex w-full max-w-6xl mx-auto">
+        {authUser && <Sidebar />}
+        <div className="flex-1 flex justify-center md:justify-start pb-16 md:pb-0">
+          <div className="w-full px-2 sm:px-4 md:px-0">
+            <Routes>
+              <Route
+                path="/"
+                element={authUser ? <HomePage /> : <Navigate to="/login" />}
+              />
+              <Route
+                path="/people"
+                element={
+                  authUser ? <SuggestedUsersPage /> : <Navigate to="/login" />
+                }
+              />
+              <Route
+                path="/signup"
+                element={!authUser ? <SignUpPage /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/login"
+                element={!authUser ? <LoginPage /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/notifications"
+                element={
+                  authUser ? <NotificationPage /> : <Navigate to="/login" />
+                }
+              />
+              <Route
+                path="/profile/:username"
+                element={authUser ? <ProfilePage /> : <Navigate to="/login" />}
+              />
+              <Route
+                path="/messages"
+                element={authUser ? <ChatPage /> : <Navigate to="/login" />}
+              />
+              <Route
+                path="/messages"
+                element={authUser ? <ChatPage /> : <Navigate to="/login" />}
+              />
+            </Routes>
+          </div>
         </div>
+        {authUser && <RightPanel />}
+        <Toaster />
       </div>
-      {authUser && <RightPanel />}
-      <Toaster />
-    </div>
+    </SocketProvider>
   );
 }
 

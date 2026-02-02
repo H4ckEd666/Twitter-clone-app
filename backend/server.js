@@ -24,9 +24,34 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 const httpServer = http.createServer(app);
 
+const allowedOrigins = [process.env.FRONTEND_URL || "http://localhost:3000"];
+
+const csrfOriginCheck = (req, res, next) => {
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return next();
+  }
+
+  const origin = req.get("origin");
+  const referer = req.get("referer");
+  const isAllowed = (value) =>
+    value && allowedOrigins.some((allowed) => value.startsWith(allowed));
+
+  if (origin && !isAllowed(origin)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  if (!origin && referer && !isAllowed(referer)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  return next();
+};
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(csrfOriginCheck);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

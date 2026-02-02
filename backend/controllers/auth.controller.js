@@ -12,12 +12,12 @@ export const signup = async (req, res) => {
     }
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).json({ error: "Username already taken" });
+      return res.status(400).json({ error: "Unable to create account" });
     }
 
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
-      return res.status(400).json({ error: "Email already registered" });
+      return res.status(400).json({ error: "Unable to create account" });
     }
 
     if (password.length < 6) {

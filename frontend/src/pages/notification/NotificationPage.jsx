@@ -7,6 +7,7 @@ import LoadingSpinner from "../../components/common/LoadingSpinner.jsx";
 import { FaUser, FaTrash } from "react-icons/fa";
 import { FaHeart, FaRegComment } from "react-icons/fa6";
 import { BiRepost } from "react-icons/bi";
+import OnlineDot from "../../components/common/OnlineDot";
 
 const NotificationPage = () => {
   const queryClient = useQueryClient();
@@ -143,7 +144,7 @@ const NotificationPage = () => {
 
   return (
     <>
-      <div className="flex-[4_4_0] border-l border-r border-gray-700 min-h-screen">
+      <div className="flex-[4_4_0] w-full border-r border-gray-700 min-h-screen pb-16 md:pb-0">
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <div className="flex items-center gap-2">
             <p className="font-bold">Notifications</p>
@@ -249,8 +250,8 @@ const NotificationPage = () => {
                     to={`/profile/${notification.from.username}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="avatar">
-                      <div className="w-8 rounded-full">
+                    <div className="avatar relative">
+                      <div className="w-8 rounded-full overflow-hidden">
                         <img
                           src={
                             notification.from.profileImg ||
@@ -258,6 +259,7 @@ const NotificationPage = () => {
                           }
                         />
                       </div>
+                      <OnlineDot userId={notification.from?._id} />
                     </div>
                     <div className="flex gap-1 items-center">
                       <span className="font-bold">
