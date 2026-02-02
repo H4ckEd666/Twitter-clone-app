@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import connectMongoDB from "./db/connectMongoDB.js";
 import cookieParser from "cookie-parser";
 import { v2 as cloudinary } from "cloudinary";
+import path from "path";
 import { initSocket } from "./socket/index.js";
 
 import authRoutes from "./routes/auth.route.js";
@@ -23,6 +24,7 @@ cloudinary.config({
 const app = express();
 const PORT = process.env.PORT || 8000;
 const httpServer = http.createServer(app);
+const __dirname = path.resolve();
 
 const allowedOrigins = [process.env.FRONTEND_URL || "http://localhost:3000"];
 
@@ -58,6 +60,13 @@ app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/notifications", notificationRoutes); // Example for notification routes
 app.use("/api/chat", chatRoutes);
+
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../frontend/build")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "frontend", "dist", "index.html"));
+  });
+}
 
 initSocket(httpServer);
 
