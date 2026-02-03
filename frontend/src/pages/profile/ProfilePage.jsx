@@ -75,6 +75,26 @@ const ProfilePage = () => {
     },
   });
 
+  const { mutate: logout, isPending: isLoggingOut } = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Logout failed");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["authUser"] });
+    },
+    onError: (err) => {
+      toast.error(err.message || "Logout failed. Please try again.");
+    },
+  });
+
   const handleImgChange = (e, state) => {
     const file = e.target.files[0];
     if (file) {
@@ -166,21 +186,30 @@ const ProfilePage = () => {
               </div>
               <div className="flex justify-end px-4 mt-5">
                 {isMyProfile && (
-                  <EditProfileModal
-                    user={user}
-                    isUpdating={isUpdating}
-                    onSave={(formData) =>
-                      updateProfile({
-                        fullName: formData.fullName,
-                        username: formData.username,
-                        email: formData.email,
-                        bio: formData.bio,
-                        links: formData.link,
-                        currentPassword: formData.currentPassword,
-                        newPassword: formData.newPassword,
-                      })
-                    }
-                  />
+                  <div className="flex flex-col items-end gap-2">
+                    <EditProfileModal
+                      user={user}
+                      isUpdating={isUpdating}
+                      onSave={(formData) =>
+                        updateProfile({
+                          fullName: formData.fullName,
+                          username: formData.username,
+                          email: formData.email,
+                          bio: formData.bio,
+                          links: formData.link,
+                          currentPassword: formData.currentPassword,
+                          newPassword: formData.newPassword,
+                        })
+                      }
+                    />
+                    <button
+                      className="btn btn-outline btn-sm rounded-full md:hidden"
+                      onClick={() => logout()}
+                      disabled={isLoggingOut}
+                    >
+                      {isLoggingOut ? <LoadingSpinner size="sm" /> : "Logout"}
+                    </button>
+                  </div>
                 )}
                 {!isMyProfile && (
                   <button
