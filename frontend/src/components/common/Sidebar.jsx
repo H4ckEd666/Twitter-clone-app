@@ -216,7 +216,7 @@ const Sidebar = () => {
           )}
           {!isSuggestedLoading && !isFollowingLoading && (
             <div className="mt-3 flex flex-col gap-2">
-              {sidebarUsers.slice(0, 4).map((user) => (
+              {sidebarUsers.slice(0, 10).map((user) => (
                 <Link
                   key={user._id}
                   to={`/profile/${user.username}`}

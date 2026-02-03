@@ -152,7 +152,7 @@ const NotificationPage = () => {
               <span className="badge badge-primary">{unreadCount} unread</span>
             )}
           </div>
-          <div className="dropdown ">
+          <div className="dropdown dropdown-end">
             <div tabIndex={0} role="button" className="m-1">
               <FaTrash className="w-4" />
             </div>
